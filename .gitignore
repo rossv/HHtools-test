@@ -205,3 +205,12 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Ignore batch run logs
+batch_run_log.csv
+batch_run_log.json
+
+# Icon files (avoid committing binaries)
+*.ico
+*.svg
+comparison_summary.csv

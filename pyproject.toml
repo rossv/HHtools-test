@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hh-tools"
+version = "0.1.0"
+description = "Utilities for hydrology and hydraulics."
+readme = "README.md"
+requires-python = ">=3.8"
+authors = [{name = "H&H Tools Maintainers"}]
+dependencies = [
+    "pandas",
+    "swmmtoolbox",
+    "pyswmm",
+    "xlsxwriter",
+    "PyQt5",
+    "matplotlib",
+    "tqdm",
+    "python-pptx",
+    "requests",
+    "geopy",
+    "numpy",
+    "scipy",
+]
+
+[project.optional-dependencies]
+noaa = ["pfdf"]
+
+[project.scripts]
+extract-timeseries = "hh_tools.extract_timeseries:main"
+extract-timeseries-gui = "hh_tools.gui.extract_timeseries_gui:main"
+hh-tools-launcher = "hh_tools.gui.master_launcher:main"
+compare-outfiles = "hh_tools.compare_outfiles:main"
+compare-outfiles-gui = "hh_tools.gui.compare_outfiles_gui:main"
+review-flow-data = "hh_tools.review_flow_data:main"
+review-flow-data-gui = "hh_tools.gui.review_flow_data_gui:main"
+design-storm = "hh_tools.design_storm:main"
+design-storm-gui = "hh_tools.gui.design_storm_gui:main"
+summarize-outfiles = "hh_tools.summarize_outfiles:main"
+summarize-outfiles-gui = "hh_tools.gui.summarize_outfiles_gui:main"
+download-rainfall = "hh_tools.download_rainfall:main"
+download-rainfall-gui = "hh_tools.gui.download_rainfall_gui:main"
+download-streamflow = "hh_tools.download_streamflow:main"
+download-streamflow-gui = "hh_tools.gui.download_streamflow_gui:main"
+batch-runner = "hh_tools.batch_runner:main"
+batch-runner-gui = "hh_tools.gui.batch_runner_gui:main"
+validate-inp = "hh_tools.validate_inp:main"
+validate-inp-gui = "hh_tools.gui.validate_inp_gui:main"
+sensitivity-analyzer = "hh_tools.sensitivity:main"
+sensitivity-analyzer-gui = "hh_tools.gui.sensitivity_gui:main"
+compare-hydrographs = "hh_tools.compare_hydrographs:main"
+compare-hydrographs-gui = "hh_tools.gui.compare_hydrographs_gui:main"
+event-extractor = "hh_tools.event_extractor:main"
+event-extractor-gui = "hh_tools.gui.event_extractor_gui:main"
+inp-diff = "hh_tools.inp_diff:main"
+inp-diff-gui = "hh_tools.gui.inp_diff_gui:main"
+calibrate-model = "hh_tools.calibrate_model:main"
+calibrate-model-gui = "hh_tools.gui.calibrate_model_gui:main"
+plot-digitizer-gui = "hh_tools.gui.plot_digitizer_gui:main"
+flow-decomp = "hh_tools.flowdecomp:main"
+flow-decomp-gui = "hh_tools.gui.flow_decomp_gui:main"
+resample-timeseries = "hh_tools.resample_timeseries:main"
+resample-timeseries-gui = "hh_tools.gui.resample_timeseries_gui:main"
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+

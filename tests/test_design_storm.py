@@ -5,7 +5,13 @@ import requests
 import sys
 import types
 from hh_tools import design_storm
-from hh_tools.design_storm import build_storm, beta_curve, write_pcswmm_dat
+from hh_tools.design_storm import (
+    build_storm,
+    beta_curve,
+    write_pcswmm_dat,
+    save_preset,
+    load_preset,
+)
 
 def test_build_storm_cumulative_depth():
     df = build_storm(depth=2.0, duration_hr=1.0, timestep_min=15, distribution='scs_type_ii', peak=0.5)
@@ -91,3 +97,76 @@ def test_main_creates_pptx(tmp_path, monkeypatch):
     assert code == 0
     assert captured["save_path"] == str(pptx_path)
     assert captured["img"] == str(hyeto)
+
+
+def test_user_distribution_from_csv(tmp_path):
+    csv = tmp_path / "curve.csv"
+    csv.write_text("t,c\n0,0\n1,1\n")
+    df = build_storm(
+        depth=1.0,
+        duration_hr=1.0,
+        timestep_min=30,
+        distribution="user",
+        custom_curve_path=csv,
+    )
+    assert df["cumulative_in"].iloc[-1] == pytest.approx(1.0)
+    assert len(df) == 2
+
+
+def test_save_and_load_preset(tmp_path):
+    preset = tmp_path / "preset.json"
+    args = types.SimpleNamespace(
+        location="loc",
+        duration=1.0,
+        return_period=10.0,
+        depth=1.0,
+        time_step=5.0,
+        distribution="scs_type_ii",
+        peak=None,
+        custom_curve=None,
+        start_datetime=None,
+        gauge_name="G",
+        export_type="intensity",
+    )
+    save_preset(args, preset)
+    empty = types.SimpleNamespace(
+        location=None,
+        duration=None,
+        return_period=None,
+        depth=None,
+        time_step=None,
+        distribution=None,
+        peak=None,
+        custom_curve=None,
+        start_datetime=None,
+        gauge_name=None,
+        export_type=None,
+    )
+    load_preset(preset, empty)
+    assert empty.duration == 1.0
+    assert empty.gauge_name == "G"
+
+
+def test_import_without_requests(monkeypatch):
+    import builtins
+    import importlib
+    import sys
+
+    sys.modules.pop("hh_tools.design_storm", None)
+    sys.modules.pop("requests", None)
+
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "requests":
+            raise ModuleNotFoundError
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    ds = importlib.import_module("hh_tools.design_storm")
+    assert ds.requests is None
+
+    df = ds.build_storm(depth=1.0, duration_hr=1.0, timestep_min=15, distribution="scs_type_ii", peak=0.5)
+    assert df["cumulative_in"].iloc[-1] == pytest.approx(1.0)
+

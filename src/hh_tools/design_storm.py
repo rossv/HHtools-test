@@ -13,7 +13,10 @@ from typing import Iterable, Optional, Dict, Tuple
 
 import numpy as np
 import pandas as pd
-import requests
+try:
+    import requests
+except Exception:  # pragma: no cover - optional dependency
+    requests = None  # type: ignore
 
 try:
     import matplotlib.pyplot as plt  # optional for PNGs
@@ -385,12 +388,12 @@ def fetch_noaa_table(lat: float, lon: float) -> Optional[pd.DataFrame]:
             df = _parse_noaa_text_to_df(txt)
             if df is not None and not df.empty:
                 return df
-        except requests.RequestException:
+        except Exception:
             logging.exception("NOAA table download failed")
             return None
     try:
         return _fetch_noaa_csv("mean", lat, lon)
-    except requests.RequestException:
+    except Exception:
         logging.exception("NOAA table download failed")
         return None
 

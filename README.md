@@ -4,6 +4,16 @@ Utilities for hydrology and hydraulics modeling support. Each tool is
 available from the command line and as a PyQt GUI so they can be bundled
 as standalone executables.
 
+## Web Apps
+
+The repository now includes experimental browser-based versions of the
+tools powered by [PyScript](https://pyscript.net).  The static files live
+in the `docs/` folder so they can be hosted directly with GitHub Pages.
+
+Visit the [Design Storm Generator](docs/design-storm.html) to try an
+interactive tool that runs completely in the browser.  Additional tools
+can be added to the `docs/` directory following the same pattern.
+
 ## Installation
 
 ```bash

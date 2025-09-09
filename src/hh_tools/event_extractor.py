@@ -16,11 +16,21 @@ import json
 
 
 @dataclass
-class MeterInfo:
-    """Start and end timestamps for a meter during a dry event."""
+class MeterEvent:
+    """Per-meter information for an event.
+
+    Parameters
+    ----------
+    start, end:
+        Timestamps bounding the event for the given meter.
+    volume:
+        Integrated event volume above ``base_flow``.  Units depend on the
+        provided flow values (e.g. ``ft^3`` or ``m^3``).
+    """
 
     start: Optional[datetime] = None
     end: Optional[datetime] = None
+    volume: float = 0.0
 
 
 @dataclass
@@ -33,13 +43,13 @@ class DryEvent:
         Global start and end of the dry period.  These are computed from the
         earliest meter start and latest meter end, respectively.
     meter_info:
-        Mapping of meter name to :class:`MeterInfo` objects storing per-meter
-        start and end times.
+        Mapping of meter name to :class:`MeterEvent` objects storing per-meter
+        start, end and volume information.
     """
 
     start: Optional[datetime] = None
     end: Optional[datetime] = None
-    meter_info: Dict[str, MeterInfo] = field(default_factory=dict)
+    meter_info: Dict[str, MeterEvent] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         """Return a JSON serialisable dictionary for the event."""
@@ -51,7 +61,11 @@ class DryEvent:
             "start": ts(self.start),
             "end": ts(self.end),
             "meters": {
-                meter: {"start": ts(info.start), "end": ts(info.end)}
+                meter: {
+                    "start": ts(info.start),
+                    "end": ts(info.end),
+                    "volume": info.volume,
+                }
                 for meter, info in self.meter_info.items()
             },
         }
@@ -92,7 +106,7 @@ def detect_dry_events(
             if idx >= len(periods):
                 continue
             start, end = periods[idx]
-            dv.meter_info[meter] = MeterInfo(start=start, end=end)
+            dv.meter_info[meter] = MeterEvent(start=start, end=end)
 
         starts = [info.start for info in dv.meter_info.values() if info.start]
         ends = [info.end for info in dv.meter_info.values() if info.end]
@@ -103,11 +117,57 @@ def detect_dry_events(
     return events
 
 
-def events_to_json(events: List[DryEvent]) -> str:
-    """Serialize a list of :class:`DryEvent` objects to JSON.
+def populate_meter_info(
+    events: List[DryEvent],
+    meter_series: Dict[str, Iterable[Tuple[datetime, float]]],
+    base_flows: Dict[str, float],
+) -> None:
+    """Populate per-meter volume information for detected events.
 
-    The resulting JSON contains the global start/end and per-meter start/end
-    for each event.
+    Parameters
+    ----------
+    events:
+        Events returned from :func:`detect_dry_events`.
+    meter_series:
+        Mapping of meter name to an iterable of ``(timestamp, flow)`` tuples.
+        The series should cover the period of interest and be ordered by time.
+    base_flows:
+        Mapping of meter name to a base flow value used to compute excess
+        volume.  If a meter is missing from this mapping, a base flow of ``0``
+        is assumed.
+
+    Notes
+    -----
+    The integration uses a simple left-hand Riemann sum where ``dt`` is the
+    time in seconds between consecutive samples and only positive ``flow -
+    base_flow`` values are accumulated.
     """
+
+    series = {m: sorted(list(s)) for m, s in meter_series.items()}
+
+    for event in events:
+        for meter, info in event.meter_info.items():
+            if meter not in series:
+                continue
+
+            base = base_flows.get(meter, 0.0)
+            readings = [r for r in series[meter] if info.start <= r[0] <= info.end]
+            if len(readings) < 2:
+                info.volume = 0.0
+                continue
+
+            volume = 0.0
+            prev_time, prev_flow = readings[0]
+            for ts, flow in readings[1:]:
+                dt = (ts - prev_time).total_seconds()
+                excess = max(prev_flow - base, 0.0)
+                volume += excess * dt
+                prev_time, prev_flow = ts, flow
+
+            info.volume = volume
+
+
+def export_to_json(events: List[DryEvent]) -> str:
+    """Serialize a list of :class:`DryEvent` objects to JSON including volume."""
 
     return json.dumps([ev.to_dict() for ev in events], indent=2)

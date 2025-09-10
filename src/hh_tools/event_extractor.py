@@ -10,7 +10,7 @@ meter specific dry weather flow (DWF) durations.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Iterable, List, Tuple, Optional
 import json
 
@@ -69,6 +69,112 @@ class DryEvent:
                 for meter, info in self.meter_info.items()
             },
         }
+        
+def detect_dry_weather_periods(
+    rainfall_events: Dict[str, Iterable[Tuple[datetime, datetime]]],
+    meter_series: Dict[str, Iterable[Tuple[datetime, float]]],
+    base_flows: Dict[str, float],
+    antecedent_dry_days: float = 0.0,
+    min_duration_hours: float = 0.0,
+    trim_start: bool = False,
+) -> List[DryEvent]:
+    """Detect dry weather periods between rainfall events.
+
+    Parameters
+    ----------
+    rainfall_events:
+        Mapping of rain gauge name to an iterable of ``(start, end)`` tuples
+        describing rainfall events.  These events are merged across all gauges
+        to determine times where rainfall occurred anywhere in the system.
+    meter_series:
+        Mapping of meter name to an iterable of ``(timestamp, flow)`` tuples.
+        Series should be ordered by time and cover the periods of interest.
+    base_flows:
+        Mapping of meter name to a base flow used when trimming the start of a
+        dry period.  Missing meters default to a base flow of ``0``.
+    antecedent_dry_days:
+        Number of days that must elapse after a rainfall event before a dry
+        period begins.
+    min_duration_hours:
+        Minimum duration, in hours, that a dry period must last in order to be
+        considered a valid event.
+    trim_start:
+        If ``True``, the start of each dry period for each meter is advanced
+        until the meter's flow falls to (or below) its base flow.
+
+    Returns
+    -------
+    list[DryEvent]
+        Dry weather events ready for volume integration.
+    """
+
+    # Collect rainfall events across all gauges and merge any overlapping
+    # intervals so that gaps represent periods with no rainfall anywhere.
+    all_events: List[Tuple[datetime, datetime]] = [
+        (s, e)
+        for events in rainfall_events.values()
+        for s, e in events
+    ]
+
+    if not all_events:
+        return []
+
+    all_events.sort(key=lambda ev: ev[0])
+    merged: List[Tuple[datetime, datetime]] = []
+    for start, end in all_events:
+        if not merged:
+            merged.append([start, end])  # type: ignore[list-item]
+            continue
+
+        last_start, last_end = merged[-1]
+        if start <= last_end:
+            merged[-1] = (last_start, max(last_end, end))
+        else:
+            merged.append((start, end))
+
+    # Determine gaps between rainfall events, applying the antecedent dry time
+    # and minimum duration constraints.
+    antecedent = timedelta(days=antecedent_dry_days)
+    min_duration = timedelta(hours=min_duration_hours)
+    dry_gaps: List[Tuple[datetime, datetime]] = []
+
+    for idx in range(len(merged) - 1):
+        gap_start = merged[idx][1] + antecedent
+        gap_end = merged[idx + 1][0]
+        if gap_end - gap_start >= min_duration:
+            dry_gaps.append((gap_start, gap_end))
+
+    if not dry_gaps:
+        return []
+
+    # Prepare per-meter dry periods, optionally trimming the start time until
+    # flows have stabilised to base levels.
+    meter_periods: Dict[str, List[Tuple[datetime, datetime]]] = {
+        m: [] for m in meter_series.keys()
+    }
+
+    sorted_series: Dict[str, List[Tuple[datetime, float]]] = {
+        m: sorted(list(s)) for m, s in meter_series.items()
+    }
+
+    for start, end in dry_gaps:
+        for meter, series in sorted_series.items():
+            m_start = start
+            if trim_start and series:
+                base = base_flows.get(meter, 0.0)
+                for ts, flow in series:
+                    if ts < start:
+                        continue
+                    if ts > end:
+                        break
+                    if flow <= base:
+                        m_start = ts
+                        break
+
+            meter_periods[meter].append((m_start, end))
+
+    # Merge per-meter periods into DryEvent objects.
+    return detect_dry_events(meter_periods)
 
 
 def detect_dry_events(
